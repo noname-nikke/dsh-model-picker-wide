@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-picker-wide",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "description": "把 DSH 输入框的模型选择器加宽：触发器（当前模型那颗胶囊）与下拉面板都放得下长模型名（含 provider / 版本后缀），面板右缘仍贴着输入框，宽度在设置页可调。",
