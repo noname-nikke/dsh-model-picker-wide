@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-picker-wide",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": false,
   "type": "module",
   "description": "Widen the DSH composer model picker so long model names with provider or version suffixes are shown in full. 加宽 DSH 输入框的模型选择器，长模型名不再被截断。",
