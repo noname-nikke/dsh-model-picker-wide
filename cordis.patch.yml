@@ -4,7 +4,7 @@
 # dsh.client 声明，宿主按它自动组装 bundle，这里不用写。
 #
 # 安装（不手改 profile patch）：
-#   dsh plugin --profile web add link:E:/DPP/dsh-model-picker-wide/plugin
+#   dsh plugin --profile web add link:<本仓库路径>
 - insert:
     - id: dsh-model-picker-wide
       name: dsh-model-picker-wide

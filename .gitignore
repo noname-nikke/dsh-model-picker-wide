@@ -1,7 +1,5 @@
-# dsh-model-picker-wide 0.1.0
+# dsh-model-picker-wide
 node_modules/
-work/
-out/
 *.log
 .DS_Store
 Thumbs.db

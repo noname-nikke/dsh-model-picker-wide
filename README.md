@@ -16,7 +16,8 @@ deepseek-v41-flash · 百度搭子 DuMate
 - **下拉面板**：272px（better-panel）/ 420px（官方）→ 480px
 - 面板**右缘仍贴着输入框**，不会顶出屏幕
 - 超长名字额外补 `title`，悬停可看全
-- 两处宽度可在 **设置 → 模型选择器宽度** 调整，即时生效
+- 两处宽度可在 **设置 → 模型选择器宽度** 调整，即时生效，文案随浏览器语言切中文 / 英文
+- **卸载即干净**：停用或重载后不残留监听器、样式表与 `data-mpw*` 标记
 
 ## 安装
 
@@ -55,14 +56,16 @@ dsh plugin --profile web remove dsh-model-picker-wide
 | 输入框胶囊宽度 | 360 px | 240–560 | 永远不会超过面板宽度 |
 | 超长名称换行 | 关 | — | 开：折行显示完整（行变高）；关：仍省略，但悬停可看全名 |
 
-配置存在浏览器 `localStorage` 的 `dsh-model-picker-wide:config:v1`。
+配置存在浏览器 `localStorage` 的 `dsh-model-picker-wide:config:v1`。设置页文案按浏览器语言在中文 / 英文之间切换。
 
 ## 实现要点
 
 1. **面板右缘钉回**：`dsh-better-panel` 用 `position:fixed` + 内联 `left`，而 `left` 是按固定 `PANEL_W=272` 在 JS 里算的。光改 CSS 会让加宽后的面板顶出视口右边。运行期读触发器（没有则读 `[data-composer-card]`）右缘，算出 `right = clamp(vw - anchorRight, 12, vw - W - 12)` 写进 `--mpw-right`，再让 CSS 用 `left:auto; right:var(--mpw-right)`。
 2. **打标而不是改结构**：只给真实节点加 `data-mpw` 属性，样式全由这些属性限定作用范围，插件卸载后残留零成本。
-3. **观察面最小**：`MutationObserver` 只盯 `document.body` 的直接子节点（两套面板都是 portal 到 body），不开 `subtree` —— 流式输出时的 DOM 抖动不会打进来。
-4. **绝不连累输入区**：所有入口都包在 `try/catch` 里，失败只打一条 `console.warn`。
+3. **观察面最小**：主 `MutationObserver` 只盯 `document.body` 的直接子节点（两套面板都是 portal 到 body），不开 `subtree`，流式输出时的 DOM 抖动不会打进来。面板被 React 重写属性时（`data-mpw` 会被一起抹掉）由"只过滤 `data-mpw` 的子树属性观察器"当场补回；点开面板后只保留 0 / 120 / 600 / 1400 ms 四次兜底重扫，不再做 7 次全文档查询。
+4. **点击才扫**：只有点击落在输入框卡片、胶囊或浮层内才触发重扫，页面别处的点击不再引起全文档查询。
+5. **卸载即干净**：通过 `ctx.effect` 注册拆卸函数，插件停用 / HMR 重载时移除观察器、resize / click 监听与两张样式表，并清掉所有 `data-mpw*` 标记、还原被改写过的 `title`。
+6. **绝不连累输入区**：所有入口都包在 `try/catch` 里，失败只打一条 `console.warn`。
 
 ## 目录
 
@@ -72,7 +75,7 @@ dsh plugin --profile web remove dsh-model-picker-wide
 ├── cordis.patch.yml    # 把 Host 半边挂进配置树
 ├── lib/index.js        # Host 半边（空实现，只为让 Loader 有条目）
 ├── lib/client.js       # 全部逻辑：样式注入 + DOM 打标 + 设置页
-└── test/smoke.mjs      # 离线冒烟测试（42 项）
+└── test/smoke.mjs      # 离线冒烟测试（bundle 协议 / 配置 / 打标 / 生命周期）
 ```
 
 ## 测试
@@ -81,7 +84,7 @@ dsh plugin --profile web remove dsh-model-picker-wide
 node test/smoke.mjs
 ```
 
-不装进 DSH 也能跑：用 `vm` 按 `__ModuleLoader__` 协议加载 `lib/client.js`，配上最小 DOM / React 桩，验证 bundle 协议、配置归一化、样式表内容、右缘钉回算法、设置页注册，以及一次仿真 DOM 下的打标与加宽。
+不装进 DSH 也能跑：用 `vm` 按 `__ModuleLoader__` 协议加载 `lib/client.js`，配上最小 DOM / React 桩，验证 bundle 协议、配置归一化、样式表内容、右缘钉回算法、设置页注册、中英双语文案、一次仿真 DOM 下的打标与加宽，以及生命周期拆卸（样式 / 监听 / 观察器 / 标记全部归零）和点击区域过滤。
 
 ## License
 

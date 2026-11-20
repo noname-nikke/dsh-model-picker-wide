@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0
+
+- 卸载即干净：apply 通过 `ctx.effect` 注册拆卸函数，插件停用 / HMR 重载时移除
+  MutationObserver、resize / click 监听、样式表与所有 `data-mpw*` 标记，并还原被
+  改写过的 `title`（旧版本会留下一个永远在扫 DOM 的 click 监听器）。
+- 打标更准更快：改为对已打标的根节点挂 `attributeFilter: ['data-mpw']` 的属性观察器，
+  React 抹掉标记的瞬间就补回；点开面板后的 7 次全文档重扫收敛为 4 次（0 / 120 / 600 / 1400 ms）。
+- 点击只扫相关区域：只有点击落在输入框卡片 / 胶囊 / 浮层内才触发重扫，页面别处的点击
+  不再引起三次全文档查询。
+- 模型行 `title` 会跟随模型名更新（行被复用换模型后不再显示旧名字）。
+- 面板右缘改用"不含滚动条"的视口宽度计算，页面出现纵向滚动条时不再偏 5px。
+- `enabled` 只认真正的 `true`，存成 `"false"` / `0` 之类不再被当成开启。
+- 设置页文案按浏览器语言在中文 / 英文之间切换。
+- `package.json` 增加 `scripts.test` 与 `publishConfig.access`；`cordis.patch.yml` 里的
+  本机绝对路径改成占位写法。
+- 冒烟测试从 42 项扩到 65 项，覆盖生命周期拆卸、点击过滤、title 更新与双语。
+
 ## 0.1.1
 
 - 修复：面板打开后约 1 秒才变宽。`dsh-better-panel` 的面板 portal 进 `body` 时尚

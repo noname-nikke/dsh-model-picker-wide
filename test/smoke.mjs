@@ -33,11 +33,17 @@ function makeElement(tag) {
       props: {},
       setProperty(k, v) { this.props[k] = v },
       getPropertyValue(k) { return this.props[k] || '' },
+      removeProperty(k) { delete this.props[k] },
     },
     textContent: '',
     setAttribute(k, v) { this.attributes[k] = String(v) },
     getAttribute(k) { return Object.prototype.hasOwnProperty.call(this.attributes, k) ? this.attributes[k] : null },
+    removeAttribute(k) { delete this.attributes[k] },
     appendChild(child) { this.children.push(child); child.parentNode = this; return child },
+    remove() {
+      const parent = this.parentNode
+      if (parent && typeof parent.removeChild === 'function') parent.removeChild(this)
+    },
     querySelector() { return null },
     querySelectorAll() { return [] },
     addEventListener() {},
@@ -50,6 +56,7 @@ function makeDocument() {
   const head = makeElement('head')
   const body = makeElement('body')
   const tags = []
+  const listeners = {}
   const doc = {
     head,
     body,
@@ -60,10 +67,21 @@ function makeDocument() {
       return tags.find((t) => t.getAttribute('data-mpw-style') === m[1]) || null
     },
     querySelectorAll() { return [] },
-    addEventListener() {},
+    addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn) },
+    removeEventListener(type, fn) {
+      const at = (listeners[type] || []).indexOf(fn)
+      if (at >= 0) listeners[type].splice(at, 1)
+    },
   }
-  head.appendChild = (el) => { tags.push(el); return el }
+  head.appendChild = (el) => { el.parentNode = head; tags.push(el); return el }
+  head.removeChild = (el) => {
+    const at = tags.indexOf(el)
+    if (at >= 0) tags.splice(at, 1)
+    el.parentNode = null
+    return el
+  }
   doc.__tags = tags
+  doc.__listeners = listeners
   return doc
 }
 
@@ -79,8 +97,12 @@ function makeWindow(doc) {
       removeItem: (k) => { storage.delete(k) },
     },
     addEventListener: (type, fn) => { (listeners[type] || (listeners[type] = [])).push(fn) },
-    removeEventListener() {},
+    removeEventListener: (type, fn) => {
+      const at = (listeners[type] || []).indexOf(fn)
+      if (at >= 0) listeners[type].splice(at, 1)
+    },
     requestAnimationFrame: (fn) => { fn(0); return 1 },
+    cancelAnimationFrame() {},
     __listeners: listeners,
     __storage: storage,
   }
@@ -110,6 +132,8 @@ const sandbox = {
   document: doc,
   localStorage: win.localStorage,
   MutationObserver: class { observe() {} disconnect() {} },
+  navigator: { language: 'zh-CN' },
+  WeakSet,
   setTimeout,
   clearTimeout,
   console,
@@ -152,6 +176,8 @@ check('越界上夹紧', norm({ panelWidth: 99999 }).panelWidth === internals.RA
 check('非数字退回默认', norm({ panelWidth: 'abc' }).panelWidth === internals.DEFAULTS.panelWidth)
 check('触发器不得宽于面板', norm({ panelWidth: 400, triggerWidth: 560 }).triggerWidth === 400)
 check('enabled=false 保留', norm({ enabled: false }).enabled === false)
+check('enabled 只认 true（字符串 false 不生效）', norm({ enabled: 'false' }).enabled === false)
+check('enabled=0 归一化为 false', norm({ enabled: 0 }).enabled === false)
 check('wrapNames 只认 true', norm({ wrapNames: 'yes' }).wrapNames === false)
 
 section('样式表')
@@ -166,6 +192,16 @@ check('默认不折行', !css.includes('white-space:normal'))
 const cssWrap = internals.buildCss(norm({ wrapNames: true }))
 check('开启后折行规则存在', cssWrap.includes('white-space:normal!important'))
 
+section('兜底时间点')
+check('兜底只剩 4 个时间点', internals.RETRY_DELAYS.join(',') === '0,120,600,1400', internals.RETRY_DELAYS.join(','))
+
+section('设置页双语')
+check('默认中文文案', internals.pickStrings().section === '模型选择器宽度', internals.pickStrings().section)
+sandbox.navigator.language = 'en-US'
+check('en-US 用英文文案', internals.pickStrings().section === 'Model picker width', internals.pickStrings().section)
+check('英文有独立提示', internals.pickStrings().enable === 'Enable widening')
+sandbox.navigator.language = 'zh-CN'
+
 section('面板右缘钉回算法')
 const cr = internals.computeRight
 check('贴着参照物右缘', cr(1400, 480, 1200) === 200, cr(1400, 480, 1200))
@@ -176,6 +212,8 @@ check('窄视口下面板自动收窄', cr(400, 480, 380) === 12, cr(400, 480, 3
 section('插件体')
 let registered = []
 const ctx = {
+  effects: [],
+  effect(fn, label) { ctx.effects.push({ fn, label }) },
   slots: {
     inject(name, fn) { registered.push({ name, fn }) },
     register(spec, component) { registered.push({ spec, component }); return () => {} },
@@ -255,9 +293,13 @@ officialMenu.querySelector = (sel) => (sel.includes('menuitem') ? makeElement('b
 const officialTrigger = nodeWithRect('button', {}, triggerRect)
 officialTrigger.style = { props: { '--dsh-model-anchor': '--dsh-mpw' }, setProperty(k, v) { this.props[k] = v } }
 
+const allNodes = [fakeTrigger, pickerRoot, pickerPanel, modelRow, officialTrigger, officialMenu, nameSpan, nameWrap]
+
 doc2.querySelectorAll = (sel) => {
   if (sel === '.cxp-root') return [pickerRoot]
   if (sel === '[style*="--dsh-model-anchor"]') return [officialTrigger, officialMenu]
+  if (sel === '[data-mpw]') return allNodes.filter((n) => n.getAttribute('data-mpw') !== null)
+  if (sel === '[data-mpw-title]') return allNodes.filter((n) => n.getAttribute('data-mpw-title') !== null)
   return []
 }
 doc2.querySelector = (sel) => {
@@ -266,9 +308,27 @@ doc2.querySelector = (sel) => {
   if (!m) return null
   return doc2.__tags.find((t) => t.getAttribute('data-mpw-style') === m[1]) || null
 }
-doc2.addEventListener = () => {}
+/* 观察器 / 定时器 / 监听器都要能被断言，所以在这里换成可追踪的桩件。 */
+const observers2 = []
+class TrackingObserver {
+  constructor(callback) { this.callback = callback; this.disconnected = false; this.targets = []; this.options = {}; observers2.push(this) }
+  observe(target, options) { this.targets.push(target); this.options = options || {} }
+  disconnect() { this.disconnected = true }
+}
+const timers2 = { scheduled: [], cleared: [] }
+sandbox2.MutationObserver = TrackingObserver
+sandbox2.setTimeout = (fn, ms) => {
+  const id = timers2.scheduled.length + 1
+  timers2.scheduled.push({ fn, ms, id })
+  return id
+}
+sandbox2.clearTimeout = (id) => { timers2.cleared.push(id) }
 
-const ctx2 = { slots: { inject() {}, register() { return () => {} } } }
+const ctx2 = {
+  effects: [],
+  effect(fn, label) { ctx2.effects.push({ fn, label }) },
+  slots: { inject() {}, register() { return () => {} } },
+}
 exports2.apply(ctx2)
 
 check('自建浮层被打标', pickerRoot.getAttribute('data-mpw') === 'picker')
@@ -280,9 +340,49 @@ check('官方菜单被打标', officialMenu.getAttribute('data-mpw') === 'menu')
 check('模型行补了完整名字', String(modelRow.getAttribute('title')).startsWith('doubao-seed-character'), modelRow.getAttribute('title'))
 check('打标幂等（不重复写 title）', (() => {
   const before = modelRow.getAttribute('title')
-  exports2.apply(ctx2)
+  internals.decorateTitles(pickerRoot)
   return modelRow.getAttribute('title') === before
 })())
+
+section('模型行 title 跟随名字更新')
+const previousName = nameSpan.textContent
+nameSpan.textContent = 'another-model · Provider B'
+internals.decorateTitles(pickerRoot)
+check('名字变了 title 跟着变', String(modelRow.getAttribute('title')).startsWith('another-model'), modelRow.getAttribute('title'))
+check('原始档位信息仍保留', String(modelRow.getAttribute('title')).includes('3 档'), modelRow.getAttribute('title'))
+nameSpan.textContent = previousName
+internals.decorateTitles(pickerRoot)
+
+section('生命周期')
+check('注册了 effect 拆卸入口', ctx2.effects.length === 1 && typeof ctx2.effects[0].fn === 'function', ctx2.effects.length)
+const clickHandlers = doc2.__listeners.click || []
+check('挂上了 click 监听', clickHandlers.length === 1, clickHandlers.length)
+check('两个观察器都挂在 body 上', observers2.length === 2 && observers2.every((o) => o.targets.includes(doc2.body)), observers2.map((o) => o.targets.length).join(','))
+check('属性观察器只过滤 data-mpw 且覆盖子树',
+  Boolean(observers2[1]) && observers2[1].options.subtree === true && observers2[1].options.attributeFilter.join(',') === 'data-mpw',
+  JSON.stringify(observers2[1] && observers2[1].options))
+
+timers2.scheduled.length = 0
+clickHandlers[0]({ target: { closest: () => null } })
+check('区域外点击不排重扫', timers2.scheduled.length === 0, timers2.scheduled.length)
+clickHandlers[0]({ target: { closest: () => ({}) } })
+check('区域内点击只排 4 次兜底', timers2.scheduled.length === 4 && timers2.scheduled[3].ms === 1400,
+  timers2.scheduled.map((t) => t.ms).join(','))
+
+const stop = ctx2.effects[0].fn()
+stop()
+check('拆卸后样式表清空', doc2.__tags.length === 0, doc2.__tags.length)
+check('拆卸后监听器移除', (doc2.__listeners.click || []).length === 0 && (win2.__listeners.resize || []).length === 0)
+check('拆卸后观察器全部断开', observers2.length > 0 && observers2.every((o) => o.disconnected))
+check('拆卸后打标属性移除', pickerRoot.getAttribute('data-mpw') === null && officialMenu.getAttribute('data-mpw') === null)
+check('拆卸后 --mpw-right 清除', pickerRoot.style.getPropertyValue('--mpw-right') === '')
+check('拆卸后 title 还原', modelRow.getAttribute('title') === '3 档：low / medium / high', modelRow.getAttribute('title'))
+check('拆卸时取消了兜底定时器', timers2.cleared.length >= 2, timers2.cleared.length)
+
+section('重载后仍能工作')
+exports2.apply(ctx2)
+check('再次 apply 重新打标', pickerRoot.getAttribute('data-mpw') === 'picker')
+check('再次 apply 重新注入样式', doc2.__tags.length === 2, doc2.__tags.length)
 
 section('结果')
 console.log(pass + ' 通过 / ' + fail + ' 失败')

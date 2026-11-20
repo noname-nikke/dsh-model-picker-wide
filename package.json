@@ -1,18 +1,20 @@
 {
   "name": "dsh-model-picker-wide",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
-  "description": "把 DSH 输入框的模型选择器加宽：触发器（当前模型那颗胶囊）与下拉面板都放得下长模型名（含 provider / 版本后缀），面板右缘仍贴着输入框，宽度在设置页可调。",
+  "description": "Widen the DSH composer model picker so long model names with provider or version suffixes are shown in full. 加宽 DSH 输入框的模型选择器，长模型名不再被截断。",
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "model-picker",
     "ui",
-    "width"
+    "width",
+    "composer"
   ],
   "license": "MIT",
+  "author": "noname-nikke",
   "main": "./lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -22,10 +24,26 @@
   "files": [
     "lib",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/noname-nikke/dsh-model-picker-wide.git"
+  },
+  "bugs": {
+    "url": "https://github.com/noname-nikke/dsh-model-picker-wide/issues"
+  },
+  "homepage": "https://github.com/noname-nikke/dsh-model-picker-wide#readme",
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dsh": {
     "bundle": {
